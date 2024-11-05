@@ -10,115 +10,46 @@ import {
     HStack,
     Text,
     Grid,
+    useToast,
 } from '@chakra-ui/react';
 import axios from 'axios';
-import ModelCard from '../components/ModelCard';
+import DeleteContainerDialog from '../components/DeleteContainerDialog';
 
-const GardenPage = () => {
-    const [garden, setGarden] = useState(null);
-    const [containerName, setContainerName] = useState('');
+const LoRACard = ({ model, containerName, fetchGarden }) => {
+    const toast = useToast();
 
-    const fetchGarden = async () => {
-        try {
-            const response = await axios.get('http://localhost:8000/garden');
-            setGarden(response.data);
-        } catch (error) {
-            console.error('Error fetching garden:', error);
-        }
-    };
-
-    useEffect(() => {
-        fetchGarden();
-    }, []);
-
-    const createContainer = async () => {
-        if (!containerName) return;
-
-        try {
-            await axios.post('http://localhost:8000/garden/containers', {
-                name: containerName,
-            });
-            setContainerName('');
-            fetchGarden();
-        } catch (error) {
-            console.error('Error creating container:', error);
-        }
-    };
-
-    return (
-        <div>
-            <Heading mb={6}>My Garden</Heading>
-            <HStack mb={6}>
-                <Input
-                    placeholder="Container name"
-                    value={containerName}
-                    onChange={(e) => setContainerName(e.target.value)}
-                />
-                <Button onClick={createContainer}>Add Container</Button>
-            </HStack>
-            {garden && garden.containers.length > 0 ? (
-                garden.containers.map((container) => (
-                    <Box key={container.name} mb={6}>
-                        <Link to={`/garden/${encodeURIComponent(container.name)}`}>
-                            <Heading size="md" mb={4} _hover={{ textDecoration: 'underline' }}>
-                                {container.name}
-                            </Heading>
-                        </Link>
-                        {container.loRAs.length > 0 ? (
-                            <Grid templateColumns="repeat(auto-fill, minmax(250px, 1fr))" gap={6}>
-                                {container.loRAs.map((loraId) => (
-                                    <LoRACard
-                                        key={loraId}
-                                        loraId={loraId}
-                                        containerName={container.name}
-                                        fetchGarden={fetchGarden}
-                                    />
-                                ))}
-                            </Grid>
-                        ) : (
-                            <Text>No LoRAs in this container.</Text>
-                        )}
-                    </Box>
-                ))
-            ) : (
-                <Text>No containers in your garden. Add one above!</Text>
-            )}
-        </div>
-    );
-};
-
-const LoRACard = ({ loraId, containerName, fetchGarden }) => {
-    const [model, setModel] = useState(null);
-
-    useEffect(() => {
-        const fetchModel = async () => {
-            try {
-                const response = await axios.get(`http://localhost:8000/models/${loraId}`);
-                setModel(response.data);
-            } catch (error) {
-                console.error('Error fetching model:', error);
-            }
-        };
-        fetchModel();
-    }, [loraId]);
+    // Early return if model is undefined
+    if (!model) {
+        return null;
+    }
 
     const removeFromContainer = async () => {
         try {
             await axios.post('http://localhost:8000/garden/containers/remove-lora', {
                 container_name: containerName,
-                lora_id: loraId,
+                lora_id: model.id,
             });
             fetchGarden();
+            toast({
+                title: 'LoRA removed successfully',
+                status: 'success',
+                duration: 2000,
+                isClosable: true,
+            });
         } catch (error) {
             console.error('Error removing LoRA:', error);
+            toast({
+                title: 'Error removing LoRA',
+                status: 'error',
+                duration: 2000,
+                isClosable: true,
+            });
         }
     };
 
-    if (!model) return null;
-
     return (
         <Box
-            backgroundImage={`url(${model.images ? model.images[0].url || 'https://via.placeholder.com/300' : 'https://via.placeholder.com/300'})`}
+            backgroundImage={`url(${model.imageUrl || 'https://via.placeholder.com/300'})`}
             backgroundSize="cover"
             backgroundPosition="center"
             borderRadius="md"
@@ -146,6 +77,108 @@ const LoRACard = ({ loraId, containerName, fetchGarden }) => {
                 </Button>
             </Box>
         </Box>
+    );
+};
+
+const GardenPage = () => {
+    const [garden, setGarden] = useState(null);
+    const [containerName, setContainerName] = useState('');
+    const toast = useToast();
+
+    const fetchGarden = async () => {
+        try {
+            const response = await axios.get('http://localhost:8000/garden');
+            setGarden(response.data);
+        } catch (error) {
+            console.error('Error fetching garden:', error);
+            toast({
+                title: 'Error fetching garden',
+                status: 'error',
+                duration: 3000,
+                isClosable: true,
+            });
+        }
+    };
+
+    useEffect(() => {
+        fetchGarden();
+    }, []);
+
+    const createContainer = async () => {
+        if (!containerName) return;
+
+        try {
+            await axios.post('http://localhost:8000/garden/containers', {
+                name: containerName,
+            });
+            setContainerName('');
+            fetchGarden();
+            toast({
+                title: 'Container created successfully',
+                status: 'success',
+                duration: 2000,
+                isClosable: true,
+            });
+        } catch (error) {
+            console.error('Error creating container:', error);
+            toast({
+                title: 'Error creating container',
+                status: 'error',
+                duration: 2000,
+                isClosable: true,
+            });
+        }
+    };
+
+    return (
+        <div>
+            <Heading mb={6}>My Garden</Heading>
+            <HStack mb={6}>
+                <Input
+                    placeholder="Container name"
+                    value={containerName}
+                    onChange={(e) => setContainerName(e.target.value)}
+                />
+                <Button onClick={createContainer}>Add Container</Button>
+            </HStack>
+            {garden && garden.containers.length > 0 ? (
+                garden.containers.map((container) => (
+                    <Box key={container.name} mb={6}>
+                        <HStack justify="space-between" align="center" mb={4}>
+                            <Link to={`/garden/${encodeURIComponent(container.name)}`}>
+                                <Heading size="md" _hover={{ textDecoration: 'underline' }}>
+                                    {container.name}
+                                </Heading>
+                            </Link>
+                            <DeleteContainerDialog
+                                containerName={container.name}
+                                onDelete={fetchGarden}
+                            />
+                        </HStack>
+                        {container.loRAs.length > 0 ? (
+                            <Grid templateColumns="repeat(auto-fill, minmax(250px, 1fr))" gap={6}>
+                                {container.loRAs.map((loraId) => {
+                                    const modelDetails = container.modelDetails[String(loraId)];
+                                    // Only render if we have the model details
+                                    return modelDetails ? (
+                                        <LoRACard
+                                            key={loraId}
+                                            model={modelDetails}
+                                            containerName={container.name}
+                                            fetchGarden={fetchGarden}
+                                        />
+                                    ) : null;
+                                })}
+                            </Grid>
+                        ) : (
+                            <Text>No LoRAs in this container.</Text>
+                        )}
+                    </Box>
+                ))
+            ) : (
+                <Text>No containers in your garden. Add one above!</Text>
+            )}
+        </div>
     );
 };
 

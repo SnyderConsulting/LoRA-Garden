@@ -7,7 +7,7 @@ import requests
 import threading
 import json
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +37,7 @@ def civitai_get(url, params=None):
     if CIVITAI_API_KEY:
         headers['Authorization'] = f'Bearer {CIVITAI_API_KEY}'
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=30)  # Increased timeout
+        response = requests.get(url, params=params, headers=headers, timeout=5)  # Increased timeout
         response.raise_for_status()
         return response
     except requests.exceptions.RequestException as e:
@@ -50,11 +50,13 @@ class LoRAModel(BaseModel):
     name: str
     creatorName: str
     imageUrl: Optional[str] = None
-    modelVersions: Optional[List]
+    description: Optional[str] = None
+    trainedWords: Optional[List[str]] = []
 
 class Container(BaseModel):
     name: str
     loRAs: List[int] = []
+    modelDetails: Dict[str, LoRAModel] = {}  # Cache model details
 
 class Garden(BaseModel):
     containers: List[Container] = []
@@ -110,9 +112,45 @@ def add_lora_to_container(add_lora_request: AddLoRARequest):
     container = next((c for c in garden.containers if c.name == add_lora_request.container_name), None)
     if container is None:
         raise HTTPException(status_code=404, detail="Container not found")
+        
     if add_lora_request.lora_id not in container.loRAs:
         container.loRAs.append(add_lora_request.lora_id)
+        
+        # Fetch and store model details if not already cached
+        if str(add_lora_request.lora_id) not in container.modelDetails:
+            try:
+                response = civitai_get(f"https://civitai.com/api/v1/models/{add_lora_request.lora_id}")
+                model_data = response.json()
+                
+                # Get first image URL from model versions if available
+                image_url = None
+                if model_data.get("modelVersions"):
+                    images = model_data["modelVersions"][0].get("images", [])
+                    if images:
+                        image_url = images[0].get("url")
+                
+                # Collect trained words from all versions
+                trained_words = []
+                for version in model_data.get("modelVersions", []):
+                    trained_words.extend(version.get("trainedWords", []))
+                
+                model_details = LoRAModel(
+                    id=model_data["id"],
+                    name=model_data["name"],
+                    creatorName=model_data.get("creator", {}).get("username", "Unknown"),
+                    imageUrl=image_url,
+                    description=model_data.get("description", ""),
+                    trainedWords=list(set(trained_words))
+                )
+                
+                container.modelDetails[str(add_lora_request.lora_id)] = model_details
+                
+            except Exception as e:
+                logger.error(f"Error fetching model details for {add_lora_request.lora_id}: {e}")
+                # Continue even if we can't fetch details - we can try again later
+        
         save_garden_data(garden)
+    
     return {"message": "LoRA added to container", "container": container}
 
 # Endpoint to remove a LoRA from a container

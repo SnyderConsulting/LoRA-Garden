@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Box,
   Text,
@@ -7,52 +7,12 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
-  useToast,
 } from '@chakra-ui/react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
-import axios from 'axios';
 
-const ModelCard = ({ model }) => {
+const ModelCard = ({ model, containers, onAddToContainer }) => {
   const { id, name, creatorName, imageUrl } = model;
-  const showcaseImageUrl = imageUrl ? imageUrl : 'https://via.placeholder.com/300'
-  const [containers, setContainers] = useState([]);
-  const toast = useToast();
-
-  useEffect(() => {
-    // Fetch the list of containers
-    const fetchContainers = async () => {
-      try {
-        const response = await axios.get('http://localhost:8000/garden');
-        setContainers(response.data.containers || []);
-      } catch (error) {
-        console.error('Error fetching containers:', error);
-      }
-    };
-    fetchContainers();
-  }, []);
-
-  const handleAddToContainer = async (containerName) => {
-    try {
-      await axios.post('http://localhost:8000/garden/containers/add-lora', {
-        container_name: containerName,
-        lora_id: id,
-      });
-      toast({
-        title: `Added to ${containerName}!`,
-        status: 'success',
-        duration: 2000,
-        isClosable: true,
-      });
-    } catch (error) {
-      console.error('Error adding LoRA:', error);
-      toast({
-        title: 'Error adding to container.',
-        status: 'error',
-        duration: 2000,
-        isClosable: true,
-      });
-    }
-  };
+  const showcaseImageUrl = imageUrl ? imageUrl : 'https://via.placeholder.com/300';
 
   return (
       <Box
@@ -88,11 +48,19 @@ const ModelCard = ({ model }) => {
               {containers.map((container) => (
                   <MenuItem
                       key={container.name}
-                      onClick={() => handleAddToContainer(container.name)}
+                      onClick={() => onAddToContainer(id, container.name)}
                   >
                     {container.name}
                   </MenuItem>
               ))}
+              {containers.length === 0 && (
+                  <MenuItem
+                      key={"empty"}
+                      onClick={() => {}}
+                  >
+                    No Containers Found
+                  </MenuItem>
+              )}
             </MenuList>
           </Menu>
         </Box>
