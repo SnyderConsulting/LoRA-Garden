@@ -61,36 +61,48 @@ const ContainerDetailPage = () => {
     };
 
     // Handler for generate button
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         // For each selected model
         const outputData = loRAs.map((model) => {
             const selectedModelImages = selectedImages[model.id] || {};
             const selectedImagePrompts = [];
 
-            // For each model version
-            model.modelVersions.forEach((version) => {
-                // For each image in the version
-                version.images.forEach((image) => {
-                    if (selectedModelImages[image.url]) {
-                        // Get the prompts from image.meta
-                        if (image.meta && image.meta.prompt) {
-                            selectedImagePrompts.push(image.meta.prompt);
-                        }
+            // For each image in the model
+            model.images.forEach((image) => {
+                if (selectedModelImages[image.url]) {
+                    // Get the prompts from image.meta if available
+                    if (image.meta && image.meta.prompt) {
+                        selectedImagePrompts.push(image.meta.prompt);
                     }
-                });
+                }
             });
 
             return {
                 id: model.id,
                 name: model.name,
+                creatorName: model.creatorName,
+                imageUrl: model.imageUrl,
                 description: model.description,
-                trainedWords: model.modelVersions.flatMap((version) => version.trainedWords),
-                selectedImagePrompts,
+                trainedWords: model.trainedWords,
+                selectedImagePrompts: selectedImagePrompts,
             };
         });
 
-        // Output the data
-        setOutputText(JSON.stringify(outputData, null, 2));
+        // Prepare the data to send to the backend
+        const requestData = {
+            modelsData: outputData,
+            userPrompt: promptInput,
+        };
+
+        try {
+            // Send a POST request to the backend
+            const response = await axios.post('http://localhost:8000/generate', requestData);
+            const generatedPrompt = response.data.generatedPrompt;
+            // Update the outputText with the generated prompt
+            setOutputText(generatedPrompt);
+        } catch (error) {
+            console.error('Error generating prompt:', error);
+        }
     };
 
     return (
@@ -101,9 +113,6 @@ const ContainerDetailPage = () => {
             {loRAs.map((model) => (
                 <Box key={model.id} mb={6}>
                     <Heading size="md" mb={4}>{model.name}</Heading>
-                    <Text mb={2}>Creator: {model.creatorName}</Text>
-                    <Text mb={2}>Description: {model.description}</Text>
-                    <Text mb={2}>Trigger Words: {model.trainedWords.join(', ')}</Text>
 
                     {/* Gallery */}
                     {model.images && model.images.length > 0 ? (
@@ -115,11 +124,6 @@ const ContainerDetailPage = () => {
                                         alt={`Image for ${model.name}`}
                                         style={{ width: '100%', borderRadius: '4px' }}
                                     />
-                                    {image.meta && image.meta.prompt && (
-                                        <Text fontSize="xs" mt={1}>
-                                            {image.meta.prompt}
-                                        </Text>
-                                    )}
                                     <Checkbox
                                         position="absolute"
                                         top="2"
@@ -152,8 +156,8 @@ const ContainerDetailPage = () => {
             {/* Output */}
             {outputText && (
                 <Box mt={6}>
-                    <Heading size="md" mb={2}>Output</Heading>
-                    <Textarea value={outputText} readOnly height="300px"/>
+                    <Heading size="md" mb={2}>Generated Prompt</Heading>
+                    <Textarea value={outputText} readOnly height="300px" />
                 </Box>
             )}
         </div>
