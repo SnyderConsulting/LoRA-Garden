@@ -1,4 +1,6 @@
 backend/__pycache__
 backend/venv
+backend/.env
+backend/garden.json
 frontend/node_modules
 frontend/.idea

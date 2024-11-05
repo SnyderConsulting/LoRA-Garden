@@ -14,6 +14,7 @@ import axios from 'axios';
 
 const ModelCard = ({ model }) => {
   const { id, name, creatorName, imageUrl } = model;
+  const showcaseImageUrl = imageUrl ? imageUrl : 'https://via.placeholder.com/300'
   const [containers, setContainers] = useState([]);
   const toast = useToast();
 
@@ -55,7 +56,7 @@ const ModelCard = ({ model }) => {
 
   return (
       <Box
-          backgroundImage={`url(${imageUrl || 'https://via.placeholder.com/300'})`}
+          backgroundImage={`url(${showcaseImageUrl})`}
           backgroundSize="cover"
           backgroundPosition="center"
           borderRadius="md"

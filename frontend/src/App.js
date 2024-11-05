@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { ChakraProvider, Container, HStack, Button } from '@chakra-ui/react';
+import ContainerDetailPage from './pages/ContainerDetailPage';
 import SearchPage from './pages/SearchPage';
 import GardenPage from './pages/GardenPage';
 
@@ -20,6 +21,7 @@ function App() {
             <Routes>
               <Route path="/" element={<SearchPage />} />
               <Route path="/garden" element={<GardenPage />} />
+              <Route path="/garden/:containerName" element={<ContainerDetailPage />} />
             </Routes>
           </Container>
         </Router>

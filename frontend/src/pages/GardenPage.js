@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Container,
     Heading,
@@ -58,7 +59,11 @@ const GardenPage = () => {
             {garden && garden.containers.length > 0 ? (
                 garden.containers.map((container) => (
                     <Box key={container.name} mb={6}>
-                        <Heading size="md" mb={4}>{container.name}</Heading>
+                        <Link to={`/garden/${encodeURIComponent(container.name)}`}>
+                            <Heading size="md" mb={4} _hover={{ textDecoration: 'underline' }}>
+                                {container.name}
+                            </Heading>
+                        </Link>
                         {container.loRAs.length > 0 ? (
                             <Grid templateColumns="repeat(auto-fill, minmax(250px, 1fr))" gap={6}>
                                 {container.loRAs.map((loraId) => (
@@ -113,7 +118,7 @@ const LoRACard = ({ loraId, containerName, fetchGarden }) => {
 
     return (
         <Box
-            backgroundImage={`url(${model.imageUrl || 'https://via.placeholder.com/300'})`}
+            backgroundImage={`url(${model.images ? model.images[0].url || 'https://via.placeholder.com/300' : 'https://via.placeholder.com/300'})`}
             backgroundSize="cover"
             backgroundPosition="center"
             borderRadius="md"

@@ -1,11 +1,19 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential
 import requests
 import threading
 import json
 import os
 from typing import List, Optional
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -19,8 +27,22 @@ app.add_middleware(
 )
 
 CIVITAI_API_URL = "https://civitai.com/api/v1/models"
+CIVITAI_API_KEY = os.getenv('CIVITAI_API_KEY')
 GARDEN_FILE = 'garden.json'
 file_lock = threading.Lock()
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def civitai_get(url, params=None):
+    headers = {}
+    if CIVITAI_API_KEY:
+        headers['Authorization'] = f'Bearer {CIVITAI_API_KEY}'
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=30)  # Increased timeout
+        response.raise_for_status()
+        return response
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching data from Civitai API: {e}")
+        raise HTTPException(status_code=502, detail="Error fetching data from external API")
 
 # Data Models
 class LoRAModel(BaseModel):
@@ -56,8 +78,6 @@ def save_garden_data(garden: Garden):
     with file_lock:
         with open(GARDEN_FILE, 'w') as f:
             json.dump(garden.dict(), f, indent=4)
-
-# Existing endpoints...
 
 # Endpoint to get the garden data
 @app.get("/garden", response_model=Garden)
@@ -128,28 +148,60 @@ def delete_container(delete_container_request: DeleteContainerRequest):
 # Endpoint to get a model by ID (needed for displaying LoRAs in the garden)
 @app.get("/models/{model_id}")
 def get_model(model_id: int):
-    response = requests.get(f"https://civitai.com/api/v1/models/{model_id}")
-    if response.status_code == 200:
-        data = response.json()
-        model = {
-            "id": data["id"],
-            "name": data["name"],
-            "creatorName": data.get("creator", {}).get("username", "Unknown"),
-            "modelVersions": data.get("modelVersions", []),
-        }
-        # Get the first image URL from the model versions
-        if model["modelVersions"]:
-            images = model["modelVersions"][0].get("images", [])
-            if images:
-                model["imageUrl"] = images[0]["url"]
-            else:
-                model["imageUrl"] = None
-        else:
-            model["imageUrl"] = None
+    logger.info(f"Received request for model ID: {model_id}")
 
-        return model
-    else:
-        raise HTTPException(status_code=response.status_code, detail="Model not found")
+    # Fetch model data
+    try:
+        response = civitai_get(f"https://civitai.com/api/v1/models/{model_id}")
+        response.raise_for_status()
+        model_data = response.json()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching model {model_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    # Fetch images for the model using /images endpoint
+    try:
+        images_response = civitai_get("https://civitai.com/api/v1/images", params={"modelId": model_id})
+        images_response.raise_for_status()
+        images_data = images_response.json()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching images for model {model_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    # Filter images to only include those with a prompt in 'meta'
+    images = []
+    for image in images_data.get("items", []):
+        meta = image.get("meta") or {}
+        if meta.get("prompt"):
+            images.append({
+                "id": image["id"],
+                "url": image["url"],
+                "nsfw": image.get("nsfw", False),
+                "width": image.get("width"),
+                "height": image.get("height"),
+                "meta": meta
+            })
+
+    # Collect trained words from modelVersions
+    trained_words_set = set()
+    for version in model_data.get("modelVersions", []):
+        trained_words = version.get("trainedWords", [])
+        trained_words_set.update(trained_words)
+
+    model = {
+        "id": model_data["id"],
+        "name": model_data["name"],
+        "description": model_data.get("description", ""),
+        "creatorName": model_data.get("creator", {}).get("username", "Unknown"),
+        "trainedWords": list(trained_words_set),
+        "images": images
+    }
+
+    return model
 
 @app.get("/models")
 def search_models(
@@ -166,7 +218,7 @@ def search_models(
     if query:
         params["query"] = query
 
-    response = requests.get(CIVITAI_API_URL, params=params)
+    response = civitai_get(CIVITAI_API_URL, params=params)
     response.raise_for_status()
     data = response.json()
 
