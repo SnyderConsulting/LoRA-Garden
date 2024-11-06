@@ -9,6 +9,8 @@ LoRA Garden is a web application that allows users to search for LoRA models, or
 - **Generate Prompts**: Create customized prompts based on selected models and your own input.
 - **View Model Details**: Access detailed information and images for each model.
 
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/CXD3GD8mBR4/0.jpg)](https://www.youtube.com/watch?v=CXD3GD8mBR4)
+
 ## Repository Structure
 
 - `/backend`: Contains the Python FastAPI backend application.
